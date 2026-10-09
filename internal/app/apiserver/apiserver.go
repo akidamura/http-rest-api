@@ -2,25 +2,24 @@ package apiserver
 
 import (
 	"io"
+	"log/slog"
 	"net/http"
-
-	"github.com/gorilla/mux"
-	"github.com/sirupsen/logrus"
+	"os"
 )
 
 // APIServer ...
 type APIServer struct {
 	config *Config
-	logger *logrus.Logger
-	router *mux.Router
+	logger *slog.Logger
+	router *http.ServeMux
 }
 
 // New ...
 func New(config *Config) *APIServer {
 	return &APIServer{
 		config: config,
-		logger: logrus.New(),
-		router: mux.NewRouter(),
+		logger: slog.New(slog.NewJSONHandler(os.Stdout, nil)),
+		router: http.NewServeMux(),
 	}
 }
 
@@ -38,18 +37,25 @@ func (s *APIServer) Start() error {
 }
 
 func (s *APIServer) configureLogger() error {
-	level, err := logrus.ParseLevel(s.config.LogLevel)
-	if err != nil {
-		return err
+	level := slog.LevelInfo
+	switch s.config.LogLevel {
+	case "debug":
+		level = slog.LevelDebug
+	case "info":
+		level = slog.LevelInfo
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
 	}
 
-	s.logger.SetLevel(level)
+	s.logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
 
 	return nil
 }
 
 func (s *APIServer) configureRouter() {
-	s.router.HandleFunc("/hello", s.handleHello())
+	s.router.HandleFunc("GET /hello", s.handleHello())
 }
 
 func (s *APIServer) handleHello() http.HandlerFunc {
