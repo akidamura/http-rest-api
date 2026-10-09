@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+
+	"github.com/akidamura/http-rest-api/internal/app/store"
 )
 
 // APIServer ...
@@ -12,6 +14,7 @@ type APIServer struct {
 	config *Config
 	logger *slog.Logger
 	router *http.ServeMux
+	store  *store.Store
 }
 
 // New ...
@@ -28,6 +31,11 @@ func (s *APIServer) Start() error {
 	if err := s.configureLogger(); err != nil {
 		return err
 	}
+
+	if err := s.configureStore(); err != nil {
+		return err
+	}
+	defer s.store.Close()
 
 	s.configureRouter()
 
@@ -51,6 +59,15 @@ func (s *APIServer) configureLogger() error {
 
 	s.logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
 
+	return nil
+}
+
+func (s *APIServer) configureStore() error {
+	st := store.New(s.config.Store)
+	if err := st.Open(); err != nil {
+		return err
+	}
+	s.store = st
 	return nil
 }
 

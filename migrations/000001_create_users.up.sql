@@ -1,0 +1,7 @@
+CREATE TABLE users
+(
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    email      VARCHAR(100) UNIQUE NOT NULL,
+    encrypted_password VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
