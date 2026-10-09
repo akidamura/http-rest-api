@@ -1,0 +1,17 @@
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# macOS
+.DS_Store
+
+# Go
+*.exe
+*.test
+*.out
+bin/
+vendor/
+
+# Env
+.env
