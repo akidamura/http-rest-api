@@ -33,7 +33,7 @@ migrate-down:
 	migrate -path migrations -database $(DB_DSN_DEV) down
 
 .PHONY: migrate-down-test
-migrate-down:
+migrate-down-test:
 	migrate -path migrations -database $(DB_DSN_TEST) down
 
 .PHONY: migrate-create

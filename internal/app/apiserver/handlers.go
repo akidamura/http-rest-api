@@ -18,7 +18,7 @@ func (s *APIServer) handleHealth() http.HandlerFunc {
 		defer cancel()
 
 		// Проверяем БД
-		if err := s.store.Ping(ctx); err != nil {
+		if err := s.pinger.Ping(ctx); err != nil {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
 			json.NewEncoder(w).Encode(map[string]string{
@@ -59,7 +59,7 @@ func (s *APIServer) handleCreateUser() http.HandlerFunc {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
-		user, err := s.store.User().Create(ctx, user)
+		user, err := s.userRepo.Create(ctx, user)
 		if err != nil {
 			// Ошибки валидации → 400
 			if errors.Is(err, model.ErrEmailRequired) ||
@@ -96,7 +96,7 @@ func (s *APIServer) handleGetUser() http.HandlerFunc {
 
 		// s — это получатель метода (func (s *APIServer) handleCreateUser).
 		// Замыкание захватывает s. Поэтому внутри func(w, r) можно писать s.store
-		user, err := s.store.User().FindByID(ctx, id)
+		user, err := s.userRepo.FindByID(ctx, id)
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
