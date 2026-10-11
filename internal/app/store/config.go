@@ -7,17 +7,23 @@ import (
 	"github.com/akidamura/http-rest-api/internal/config"
 )
 
-// Config ...
+// Config store
 type Config struct {
 	DatabaseURL string
 }
 
+// NewConfig собирает конфиг store из ENV
 func NewConfig() *Config {
-	url := config.GetEnv("DATABASE_URL", "")
-	if url == "" {
-		log.Fatal("DATABASE_URL environment variable not set")
+	dsn := buildDSN()
+
+	if config.GetEnv("DB_PASSWORD", "") == "" {
+		log.Fatal("DB_PASSWORD environment variable not set")
 	}
-	return &Config{DatabaseURL: buildDSN()}
+	if config.GetEnv("DB_USER", "") == "" {
+		log.Fatal("DB_USER environment variable not set")
+	}
+
+	return &Config{DatabaseURL: dsn}
 }
 
 func buildDSN() string {
@@ -27,6 +33,6 @@ func buildDSN() string {
 		config.GetEnv("DB_PASSWORD", ""),
 		config.GetEnv("DB_HOST", "localhost"),
 		config.GetEnv("DB_PORT", "3306"),
-		config.GetEnv("DB_NAME", "restapi_dev"),
+		config.GetEnv("DB_NAME", "dbname"),
 	)
 }

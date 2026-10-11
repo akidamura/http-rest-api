@@ -9,11 +9,12 @@ import (
 
 // Store ...
 type Store struct {
-	config *Config
-	db     *sql.DB
+	config         *Config
+	db             *sql.DB
+	userRepository *UserRepository
 }
 
-// New ...
+// New создает объект Store с конфигом
 func New(config *Config) *Store {
 	if config.DatabaseURL == "" {
 		log.Fatal("DATABASE_URL environment variable not set")
@@ -21,22 +22,32 @@ func New(config *Config) *Store {
 	return &Store{config: config}
 }
 
-// Open ...
+// Open подключается к MySQL через DSN
 func (s *Store) Open() error {
-	db, err := sql.Open("mysql", s.config.DatabaseURL)
+	db, err := sql.Open("mysql", s.config.DatabaseURL) // ленивое подключение
 	if err != nil {
 		return err
 	}
 	if err := db.Ping(); err != nil {
 		return err
-	}
+	} // реальная проверка на подключение
 	s.db = db
 	return nil
 }
 
-// Close ...
+// Close закрывает подключение к MySQL
 func (s *Store) Close() {
 	if s.db != nil {
 		s.db.Close()
 	}
+}
+
+func (s *Store) User() *UserRepository {
+	if s.userRepository != nil {
+		return s.userRepository
+	}
+	s.userRepository = &UserRepository{
+		store: s,
+	}
+	return s.userRepository
 }

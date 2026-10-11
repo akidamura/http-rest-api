@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -17,16 +16,17 @@ type APIServer struct {
 	store  *store.Store
 }
 
-// New ...
+// New собирает структуру сервера
 func New(config *Config) *APIServer {
 	return &APIServer{
-		config: config,
-		logger: slog.New(slog.NewJSONHandler(os.Stdout, nil)),
-		router: http.NewServeMux(),
+		config: config,                                        //	содержит весь конфиг, включая config.Store
+		logger: slog.New(slog.NewJSONHandler(os.Stdout, nil)), //	логгер по умолчанию
+		router: http.NewServeMux(),                            //	пустой ServeMux
+		//	store не указан → nil
 	}
 }
 
-// Start ...
+// Start подключает сервер
 func (s *APIServer) Start() error {
 	if err := s.configureLogger(); err != nil {
 		return err
@@ -37,13 +37,17 @@ func (s *APIServer) Start() error {
 	}
 	defer s.store.Close()
 
-	s.configureRouter()
+	s.configureRouter() //	ручки используют s.store, поэтому store уже должен быть
 
 	s.logger.Info("Starting API Server")
 
+	//	ListenAndServe запускает TCP-сервер. При каждом входящем запросе вызывает s.router.ServeHTTP(w, r)
+	//	передаёт роутер в http.Server. http.Server сам вызывает router.ServeHTTP для каждого запроса
+	//	s.router - ServeMux с зарегистрированными маршрутами
 	return http.ListenAndServe(s.config.BindAddr, s.router)
 }
 
+// configureLogger переопределяет level
 func (s *APIServer) configureLogger() error {
 	level := slog.LevelInfo
 	switch s.config.LogLevel {
@@ -57,27 +61,25 @@ func (s *APIServer) configureLogger() error {
 		level = slog.LevelError
 	}
 
+	//	новый логгер с JSON выводом и level
 	s.logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
 
 	return nil
 }
 
+// configureStore создаёт store.Store - объект с подключением к MySQL и сохраняет в s.store
 func (s *APIServer) configureStore() error {
-	st := store.New(s.config.Store)
+	st := store.New(s.config.Store) //	передает store.Config
 	if err := st.Open(); err != nil {
-		return err
+		return err //	если MySQL не запущен st.Open() вернет ошибку, сервер не запустится
 	}
 	s.store = st
 	return nil
 }
 
+// configureRouter регистрирует ручки
 func (s *APIServer) configureRouter() {
 	s.router.HandleFunc("GET /hello", s.handleHello())
-}
-
-func (s *APIServer) handleHello() http.HandlerFunc {
-
-	return func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "Hello")
-	}
+	s.router.HandleFunc("POST /users", s.handleCreateUser())
+	s.router.HandleFunc("GET /users/{id}", s.handleGetUser())
 }
