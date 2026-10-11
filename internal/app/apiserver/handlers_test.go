@@ -156,6 +156,113 @@ func TestHandleCreateUser_ValidationError(t *testing.T) {
 	}
 }
 
+// --- CreateSession ---
+
+// TestHandleCreateSession_OK успех → 200
+func TestHandleCreateSession_OK(t *testing.T) {
+	// 1. Готовим пользователя с хешем
+	u := &model.User{Email: "user@example.org"}
+	if err := u.BeforeCreate(); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Фейк возвращает этого пользователя
+	repo := newFakeUserRepo()
+	repo.findByEmailFn = func(_ context.Context, _ string) (*model.User, error) {
+		return u, nil
+	}
+
+	api := newTestAPI(repo, &fakePinger{})
+
+	// 3. Запрос
+	body := `{"email":"user@example.org","password":"secret123"}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/sessions", strings.NewReader(body))
+
+	t.Logf("request body: %s", body)
+
+	// 4. Дергаем хендлер
+	api.handleCreateSession().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got %d, want %d, body=%q", rec.Code, http.StatusOK, rec.Body.String())
+	}
+}
+
+// TestHandleCreateSession_UserNotFound пользователь не найден → 401
+func TestHandleCreateSession_UserNotFound(t *testing.T) {
+	// findByEmailFn дефолтный возвращает nil, nil — уже подходит
+	api := newTestAPI(newFakeUserRepo(), &fakePinger{})
+
+	body := `{"email":"nobody@example.org","password":"secret123"}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/sessions", strings.NewReader(body))
+
+	api.handleCreateSession().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("got %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+// TestHandleCreateSession_WrongPassword пароль неверный → 401
+func TestHandleCreateSession_WrongPassword(t *testing.T) {
+	u := &model.User{Email: "user@example.org"}
+	if err := u.BeforeCreate(); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := newFakeUserRepo()
+	repo.findByEmailFn = func(_ context.Context, _ string) (*model.User, error) {
+		return u, nil
+	}
+
+	api := newTestAPI(repo, &fakePinger{})
+
+	body := `{"email":"user@example.org","password":"WRONG"}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/sessions", strings.NewReader(body))
+
+	api.handleCreateSession().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("got %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+// TestHandleCreateSession_BadJSON невалидный JSON → 400
+func TestHandleCreateSession_BadJSON(t *testing.T) {
+	api := newTestAPI(newFakeUserRepo(), &fakePinger{})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/sessions", bytes.NewBufferString("{not json"))
+
+	api.handleCreateSession().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("got %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+// TestHandleCreateSession_DBError ошибка БД → 500
+func TestHandleCreateSession_DBError(t *testing.T) {
+	repo := newFakeUserRepo()
+	repo.findByEmailFn = func(_ context.Context, _ string) (*model.User, error) {
+		return nil, errors.New("db error")
+	}
+	api := newTestAPI(repo, &fakePinger{})
+
+	body := `{"email":"user@example.org","password":"secret123"}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/sessions", strings.NewReader(body))
+
+	api.handleCreateSession().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("got %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
 // --- GetUser ---
 
 // TestHandleGetUser_OK Найден → 200

@@ -79,6 +79,45 @@ func (s *APIServer) handleCreateUser() http.HandlerFunc {
 	}
 }
 
+// handleCreateSession ...
+func (s *APIServer) handleCreateSession() http.HandlerFunc {
+	type request struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req request
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		// Ищем пользователя
+		user, err := s.userRepo.FindByEmail(ctx, req.Email)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		if user == nil {
+			http.Error(w, "invalid email or password", http.StatusUnauthorized)
+			return
+		}
+
+		// Проверяем пароль
+		if !user.ComparePassword(req.Password) {
+			http.Error(w, "invalid email or password", http.StatusUnauthorized)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(user)
+	}
+}
+
 // handleGetUser ...
 func (s *APIServer) handleGetUser() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
