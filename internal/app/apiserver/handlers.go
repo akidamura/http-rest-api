@@ -112,3 +112,76 @@ func (s *APIServer) handleGetUser() http.HandlerFunc {
 		json.NewEncoder(w).Encode(user)
 	}
 }
+
+// handleUpdateUser ...
+func (s *APIServer) handleUpdateUser() http.HandlerFunc {
+	type request struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		// 1. ID из URL
+		idStr := r.PathValue("id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			http.Error(w, "invalid user id", http.StatusBadRequest)
+			return
+		}
+
+		// 2. Декодируем JSON
+		var req request
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		// 3. Собираем модель
+		user := &model.User{
+			ID:       id,
+			Email:    req.Email,
+			Password: req.Password,
+		}
+
+		// 4. Обновляем
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		user, err = s.userRepo.Update(ctx, user)
+		if err != nil {
+			if errors.Is(err, model.ErrEmailRequired) || errors.Is(err, model.ErrPasswordRequired) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(user)
+	}
+}
+
+// handleDeleteUser ...
+func (s *APIServer) handleDeleteUser() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// 1. ID из URL
+		idStr := r.PathValue("id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			http.Error(w, "invalid user id", http.StatusBadRequest)
+			return
+		}
+
+		// 2. Удаляем
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		if err := s.userRepo.Delete(ctx, id); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		// 3. Ответ
+		w.WriteHeader(http.StatusNoContent) // 204
+	}
+}

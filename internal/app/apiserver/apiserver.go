@@ -38,38 +38,11 @@ func (s *APIServer) Start() error {
 	return http.ListenAndServe(s.config.BindAddr, s.router)
 }
 
-//// configureLogger переопределяет level
-//func (s *APIServer) configureLogger() error {
-//	level := slog.LevelInfo
-//	switch s.config.LogLevel {
-//	case "debug":
-//		level = slog.LevelDebug
-//	case "info":
-//		level = slog.LevelInfo
-//	case "warn":
-//		level = slog.LevelWarn
-//	case "error":
-//		level = slog.LevelError
-//	}
-//
-//	//	новый логгер с JSON выводом и level
-//	s.logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
-//	return nil
-//}
-//
-//// configureStore создаёт store.Store - объект с подключением к MySQL и сохраняет в s.store
-//func (s *APIServer) configureStore() error {
-//	st := store.New(s.config.Store) //	передает store.Config
-//	if err := st.Open(); err != nil {
-//		return err //	если MySQL не запущен st.Open() вернет ошибку, сервер не запустится
-//	}
-//	s.store = st
-//	return nil
-//}
-
 // configureRouter регистрирует ручки
 func (s *APIServer) configureRouter() {
 	s.router.HandleFunc("GET /health", s.handleHealth())
 	s.router.HandleFunc("POST /users", s.handleCreateUser())
 	s.router.HandleFunc("GET /users/{id}", s.handleGetUser())
+	s.router.HandleFunc("PUT /users/{id}", s.handleUpdateUser())
+	s.router.HandleFunc("DELETE /users/{id}", s.handleDeleteUser())
 }

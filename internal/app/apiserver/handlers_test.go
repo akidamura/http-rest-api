@@ -3,9 +3,11 @@ package apiserver
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/akidamura/http-rest-api/internal/app/model"
@@ -17,6 +19,8 @@ type fakeUserRepo struct {
 	createFn      func(ctx context.Context, u *model.User) (*model.User, error)
 	findByIDFn    func(ctx context.Context, id int) (*model.User, error)
 	findByEmailFn func(ctx context.Context, email string) (*model.User, error)
+	updateFn      func(ctx context.Context, u *model.User) (*model.User, error)
+	deleteFn      func(ctx context.Context, id int) error
 }
 
 func (f *fakeUserRepo) Create(ctx context.Context, u *model.User) (*model.User, error) {
@@ -28,21 +32,51 @@ func (f *fakeUserRepo) FindByID(ctx context.Context, id int) (*model.User, error
 func (f *fakeUserRepo) FindByEmail(ctx context.Context, email string) (*model.User, error) {
 	return f.findByEmailFn(ctx, email)
 }
+func (f *fakeUserRepo) Update(ctx context.Context, u *model.User) (*model.User, error) {
+	return f.updateFn(ctx, u)
+}
+func (f *fakeUserRepo) Delete(ctx context.Context, id int) error {
+	return f.deleteFn(ctx, id)
+}
 
 type fakePinger struct{ err error }
 
 func (f *fakePinger) Ping(ctx context.Context) error { return f.err }
 
-// --- хелпер ---
+// --- хелперы ---
+
+func newFakeUserRepo() *fakeUserRepo {
+	return &fakeUserRepo{
+		createFn: func(_ context.Context, u *model.User) (*model.User, error) {
+			return u, nil
+		},
+		findByIDFn: func(_ context.Context, _ int) (*model.User, error) {
+			return nil, nil
+		},
+		findByEmailFn: func(_ context.Context, _ string) (*model.User, error) {
+			return nil, nil
+		},
+		updateFn: func(_ context.Context, u *model.User) (*model.User, error) {
+			return u, nil
+		},
+		deleteFn: func(_ context.Context, _ int) error {
+			return nil
+		},
+	}
+}
 
 func newTestAPI(repo UserRepository, p Pinger) *APIServer {
 	return New(NewConfig(), slog.Default(), repo, p)
 }
 
-// --- тесты ---
+// --- ТЕСТЫ ---
 
+// --- Health ---
+
+// TestHandleHealth_OK БД жива → 200
 func TestHandleHealth_OK(t *testing.T) {
-	api := newTestAPI(&fakeUserRepo{}, &fakePinger{})
+	api := newTestAPI(newFakeUserRepo(), &fakePinger{})
+
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 
@@ -53,8 +87,9 @@ func TestHandleHealth_OK(t *testing.T) {
 	}
 }
 
+// TestHandleHealth_DBDown БД упала → 503
 func TestHandleHealth_DBDown(t *testing.T) {
-	api := newTestAPI(&fakeUserRepo{}, &fakePinger{err: context.DeadlineExceeded})
+	api := newTestAPI(newFakeUserRepo(), &fakePinger{err: context.DeadlineExceeded})
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 
@@ -65,12 +100,86 @@ func TestHandleHealth_DBDown(t *testing.T) {
 	}
 }
 
+// --- CreateUser ---
+
+// TestHandleCreateUser_OK Успех → 201
+func TestHandleCreateUser_OK(t *testing.T) {
+	api := newTestAPI(newFakeUserRepo(), &fakePinger{})
+
+	body := `{"email":"user@example.org","password":"secret123"}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	t.Logf("request body: %s", body)
+
+	api.handleCreateUser().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("got %d, want %d, resp body=%q", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+}
+
+// TestHandleCreateUser_BadJSON Плохой JSON → 400
+func TestHandleCreateUser_BadJSON(t *testing.T) {
+	api := newTestAPI(newFakeUserRepo(), &fakePinger{})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/users", bytes.NewBufferString("{not json"))
+	req.Header.Set("Content-Type", "application/json")
+
+	api.handleCreateUser().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("got %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+// TestHandleCreateUser_ValidationError Ошибка валидации → 400
+func TestHandleCreateUser_ValidationError(t *testing.T) {
+	repo := newFakeUserRepo()
+	repo.createFn = func(_ context.Context, _ *model.User) (*model.User, error) {
+		return nil, model.ErrEmailRequired
+	}
+	api := newTestAPI(repo, &fakePinger{})
+
+	body := `{"email":"","password":""}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(body))
+
+	t.Logf("request body: %s", body)
+
+	api.handleCreateUser().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("got %d, want %d, resp body=%q", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+}
+
+// --- GetUser ---
+
+// TestHandleGetUser_OK Найден → 200
+func TestHandleGetUser_OK(t *testing.T) {
+	repo := newFakeUserRepo()
+	repo.findByIDFn = func(ctx context.Context, id int) (*model.User, error) {
+		return &model.User{ID: id, Email: "user@example.org"}, nil
+	}
+	api := newTestAPI(repo, &fakePinger{})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/users/42", nil)
+	req.SetPathValue("id", "42")
+
+	api.handleGetUser().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+// TestHandleGetUser_NotFound Не найден → 404
 func TestHandleGetUser_NotFound(t *testing.T) {
-	api := newTestAPI(&fakeUserRepo{
-		findByIDFn: func(_ context.Context, _ int) (*model.User, error) {
-			return nil, nil
-		},
-	}, &fakePinger{})
+	api := newTestAPI(newFakeUserRepo(), &fakePinger{})
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/user/42", nil)
@@ -83,16 +192,125 @@ func TestHandleGetUser_NotFound(t *testing.T) {
 	}
 }
 
-func TestHandleCreateUser_BadJSON(t *testing.T) {
-	api := newTestAPI(&fakeUserRepo{}, &fakePinger{})
+// TestHandleGetUser_InvalidID Невалидный ID → 400
+func TestHandleGetUser_InvalidID(t *testing.T) {
+	api := newTestAPI(newFakeUserRepo(), &fakePinger{})
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/users", bytes.NewBufferString("{not json"))
-	req.Header.Set("Content-Type", "application/json")
+	req := httptest.NewRequest(http.MethodGet, "/users/abc", nil)
+	req.SetPathValue("id", "abc")
 
-	api.handleCreateUser().ServeHTTP(rec, req)
+	api.handleGetUser().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("got %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+// --- UpdateUser ---
+
+// TestHandleUpdateUser_OK Успех → 200
+func TestHandleUpdateUser_OK(t *testing.T) {
+	repo := newFakeUserRepo()
+	repo.updateFn = func(_ context.Context, u *model.User) (*model.User, error) {
+		return u, nil
+	}
+	api := newTestAPI(repo, &fakePinger{})
+
+	body := `{"email":"user@example.org","password":"secret123"}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/users/42", strings.NewReader(body))
+	req.SetPathValue("id", "42")
+
+	api.handleUpdateUser().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+// TestHandleUpdateUser_InvalidID Невалидный ID → 400
+func TestHandleUpdateUser_InvalidID(t *testing.T) {
+	api := newTestAPI(newFakeUserRepo(), &fakePinger{})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/users/abc", nil)
+	req.SetPathValue("id", "abc")
+
+	api.handleUpdateUser().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("got %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+// TestHandleUpdateUser_ValidationError Валидация → 400
+func TestHandleUpdateUser_ValidationError(t *testing.T) {
+	repo := newFakeUserRepo()
+	repo.updateFn = func(_ context.Context, _ *model.User) (*model.User, error) {
+		return nil, model.ErrPasswordRequired
+	}
+	api := newTestAPI(repo, &fakePinger{})
+
+	body := `{"email":"user@example.org","password":""}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/users/42", strings.NewReader(body))
+	req.SetPathValue("id", "42")
+
+	api.handleUpdateUser().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("got %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+// --- DeleteUser ---
+
+// TestHandleDeleteUser_OK Успех → 204
+func TestHandleDeleteUser_OK(t *testing.T) {
+	api := newTestAPI(newFakeUserRepo(), &fakePinger{})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodDelete, "/users/42", nil)
+	req.SetPathValue("id", "42")
+
+	api.handleDeleteUser().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("got %d, want %d", rec.Code, http.StatusNoContent)
+	}
+}
+
+// TestHandleDeleteUser_InvalidID Невалидный ID → 400
+func TestHandleDeleteUser_InvalidID(t *testing.T) {
+	api := newTestAPI(newFakeUserRepo(), &fakePinger{})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodDelete, "/users/abc", nil)
+	req.SetPathValue("id", "abc")
+
+	api.handleDeleteUser().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("got %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+// TestHandleDeleteUser_DBError Ошибка БД → 500
+func TestHandleDeleteUser_DBError(t *testing.T) {
+	repo := newFakeUserRepo()
+	repo.deleteFn = func(_ context.Context, _ int) error {
+		return errors.New("db error")
+	}
+	api := newTestAPI(repo, &fakePinger{})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodDelete, "/users/42", nil)
+	req.SetPathValue("id", "42")
+
+	api.handleDeleteUser().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("got %d, want %d", rec.Code, http.StatusInternalServerError)
 	}
 }
