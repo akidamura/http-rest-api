@@ -1,8 +1,11 @@
 package main
 
 import (
+	"database/sql"
 	"log/slog"
 	"os"
+
+	_ "github.com/go-sql-driver/mysql"
 
 	"github.com/akidamura/http-rest-api/internal/app/apiserver"
 	"github.com/akidamura/http-rest-api/internal/app/store"
@@ -18,13 +21,22 @@ func main() {
 		Level: parseLogLevel(cfg.LogLevel),
 	}))
 
-	st := store.New(cfg.Store)
-	if err := st.Open(); err != nil {
-		logger.Error("failed to open store", "err", err)
+	// 1. Открываем соединение
+	db, err := sql.Open("mysql", store.BuildDSN())
+	if err != nil {
+		logger.Error("failed to open db", "err", err)
+		return
+	}
+	if err := db.Ping(); err != nil {
+		logger.Error("Error pinging database", "err", err)
 		os.Exit(1)
 	}
-	defer st.Close()
+	defer db.Close()
 
+	// 2. Собираем Store поверх готового *sql.DB
+	st := store.New(db)
+
+	// 3. Собираем сервер
 	s := apiserver.New(cfg, logger, st.User(), st)
 	if err := s.Start(); err != nil {
 		logger.Error("server stopped", "err", err)
