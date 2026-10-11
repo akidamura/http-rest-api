@@ -161,7 +161,7 @@ func TestHandleCreateUser_ValidationError(t *testing.T) {
 // TestHandleCreateSession_OK успех → 200
 func TestHandleCreateSession_OK(t *testing.T) {
 	// 1. Готовим пользователя с хешем
-	u := &model.User{Email: "user@example.org"}
+	u := &model.User{Email: "user@example.org", Password: "secret123"}
 	if err := u.BeforeCreate(); err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func TestHandleCreateSession_UserNotFound(t *testing.T) {
 
 // TestHandleCreateSession_WrongPassword пароль неверный → 401
 func TestHandleCreateSession_WrongPassword(t *testing.T) {
-	u := &model.User{Email: "user@example.org"}
+	u := &model.User{Email: "user@example.org", Password: "secret123"}
 	if err := u.BeforeCreate(); err != nil {
 		t.Fatal(err)
 	}
