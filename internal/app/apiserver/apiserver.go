@@ -79,7 +79,7 @@ func (s *APIServer) configureStore() error {
 
 // configureRouter регистрирует ручки
 func (s *APIServer) configureRouter() {
-	s.router.HandleFunc("GET /hello", s.handleHello())
+	s.router.HandleFunc("GET /health", s.handleHealth())
 	s.router.HandleFunc("POST /users", s.handleCreateUser())
 	s.router.HandleFunc("GET /users/{id}", s.handleGetUser())
 }

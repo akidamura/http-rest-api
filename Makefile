@@ -10,7 +10,15 @@ build:
 
 .PHONY: test
 test:
+	go test ./... -v -race
+
+.PHONY: test-integrations
+test-integrations:
 	go test ./internal/app/store/... -v -race
+
+.PHONY: test-units
+test-units:
+	go test ./internal/app/model/... -v -race
 
 .PHONY: migrate-up
 migrate-up:

@@ -4,8 +4,10 @@ import (
 	"testing"
 )
 
-// TestStore ...
-func TestStore(t *testing.T, tables ...string) *Store {
+// NewTestStore создаёт Store для интеграционных тестов.
+// Подключается к тестовой БД, очищает указанные таблицы
+// перед тестом и закрывает соединение после через t.Cleanup.
+func NewTestStore(t *testing.T, tables ...string) *Store {
 	t.Helper() // показывает это функция - хелпер». Если тест упадёт, в выводе будет строка вызова из теста, а не из хелпера
 
 	config := NewConfig()

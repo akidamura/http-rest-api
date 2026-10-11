@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"log"
 
@@ -12,6 +13,11 @@ type Store struct {
 	config         *Config
 	db             *sql.DB
 	userRepository *UserRepository
+}
+
+// Ping проверяет соединение с БД.
+func (s *Store) Ping(ctx context.Context) error {
+	return s.db.PingContext(ctx)
 }
 
 // New создает объект Store с конфигом
