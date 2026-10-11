@@ -1,14 +1,14 @@
-package store_test
+package sqlstore_test
 
 import (
 	"context"
 	"testing"
 
-	"github.com/akidamura/http-rest-api/internal/app/store"
+	"github.com/akidamura/http-rest-api/internal/app/store/sqlstore"
 )
 
 func TestUserRepository_Create(t *testing.T) {
-	s := store.NewTestStore(t, "users")
+	s := sqlstore.NewTestStore(t, "users")
 	u := createTestUser(t, s, "user@example.org")
 
 	if u.ID == 0 {
@@ -24,7 +24,7 @@ func TestUserRepository_Create(t *testing.T) {
 }
 
 func TestUserRepository_FindByEmail(t *testing.T) {
-	s := store.NewTestStore(t, "users")
+	s := sqlstore.NewTestStore(t, "users")
 	ctx := context.Background()
 	email := "user@example.org"
 
@@ -54,7 +54,7 @@ func TestUserRepository_FindByEmail(t *testing.T) {
 }
 
 func TestUserRepository_FindByID(t *testing.T) {
-	s := store.NewTestStore(t, "users")
+	s := sqlstore.NewTestStore(t, "users")
 	ctx := context.Background()
 
 	// 1. Не найден → nil, nil

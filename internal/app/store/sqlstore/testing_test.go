@@ -1,9 +1,10 @@
-package store
+package sqlstore
 
 import (
 	"database/sql"
 	"testing"
 
+	"github.com/akidamura/http-rest-api/internal/app/store"
 	_ "github.com/go-sql-driver/mysql"
 )
 
@@ -13,7 +14,7 @@ import (
 func NewTestStore(t *testing.T, tables ...string) *Store {
 	t.Helper() // показывает это функция - хелпер». Если тест упадёт, в выводе будет строка вызова из теста, а не из хелпера
 
-	db, err := sql.Open("mysql", BuildDSN())
+	db, err := sql.Open("mysql", store.BuildDSN())
 	if err != nil {
 		t.Fatal(err)
 	}

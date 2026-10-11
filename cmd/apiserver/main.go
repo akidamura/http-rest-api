@@ -5,10 +5,11 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/akidamura/http-rest-api/internal/app/store"
+	"github.com/akidamura/http-rest-api/internal/app/store/sqlstore"
 	_ "github.com/go-sql-driver/mysql"
 
 	"github.com/akidamura/http-rest-api/internal/app/apiserver"
-	"github.com/akidamura/http-rest-api/internal/app/store"
 	"github.com/joho/godotenv"
 )
 
@@ -34,7 +35,7 @@ func main() {
 	defer db.Close()
 
 	// 2. Собираем Store поверх готового *sql.DB
-	st := store.New(db)
+	st := sqlstore.New(db)
 
 	// 3. Собираем сервер
 	s := apiserver.New(cfg, logger, st.User(), st)
