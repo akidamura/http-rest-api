@@ -77,3 +77,22 @@ func (r *UserRepository) FindByID(ctx context.Context, id int) (*model.User, err
 
 	return u, nil
 }
+
+func (r *UserRepository) Update(ctx context.Context, u *model.User) (*model.User, error) {
+	if err := u.BeforeCreate(); err != nil {
+		return nil, err
+	}
+
+	query := `UPDATE users SET email = ?, encrypted_password = ? WHERE id = ?`
+	_, err := r.store.db.ExecContext(ctx, query, u.Email, u.EncryptedPassword, u.ID)
+	if err != nil {
+		return nil, err
+	}
+	return u, nil
+}
+
+func (r *UserRepository) Delete(ctx context.Context, id int) error {
+	query := `DELETE FROM users WHERE id = ?`
+	_, err := r.store.db.ExecContext(ctx, query, id)
+	return err
+}

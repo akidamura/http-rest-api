@@ -11,6 +11,8 @@ type UserRepository interface {
 	Create(ctx context.Context, u *model.User) (*model.User, error)
 	FindByEmail(ctx context.Context, email string) (*model.User, error)
 	FindByID(ctx context.Context, id int) (*model.User, error)
+	Update(ctx context.Context, u *model.User) (*model.User, error)
+	Delete(ctx context.Context, id int) error
 }
 
 // Pinger — то, что нужно /health, чтобы проверить соединение.
