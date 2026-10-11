@@ -94,8 +94,6 @@ func (s *APIServer) handleGetUser() http.HandlerFunc {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
-		// s — это получатель метода (func (s *APIServer) handleCreateUser).
-		// Замыкание захватывает s. Поэтому внутри func(w, r) можно писать s.store
 		user, err := s.userRepo.FindByID(ctx, id)
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)

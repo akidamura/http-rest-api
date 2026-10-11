@@ -1,7 +1,10 @@
 package store
 
 import (
+	"database/sql"
 	"testing"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 // NewTestStore создаёт Store для интеграционных тестов.
@@ -10,23 +13,25 @@ import (
 func NewTestStore(t *testing.T, tables ...string) *Store {
 	t.Helper() // показывает это функция - хелпер». Если тест упадёт, в выводе будет строка вызова из теста, а не из хелпера
 
-	config := NewConfig()
-	s := New(config)
-	if err := s.Open(); err != nil {
+	db, err := sql.Open("mysql", BuildDSN())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Ping(); err != nil {
 		t.Fatal(err)
 	}
 
 	// Очистка ПЕРЕД тестом
 	for _, table := range tables {
-		if _, err := s.db.Exec("TRUNCATE TABLE " + table); err != nil {
+		if _, err := db.Exec("TRUNCATE TABLE " + table); err != nil {
 			t.Fatal(err)
 		}
 	}
 
 	// Закрытие ПОСЛЕ теста
 	t.Cleanup(func() {
-		s.Close()
+		db.Close()
 	})
 
-	return s
+	return New(db)
 }

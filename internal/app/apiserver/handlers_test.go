@@ -66,7 +66,7 @@ func newFakeUserRepo() *fakeUserRepo {
 }
 
 func newTestAPI(repo UserRepository, p Pinger) *APIServer {
-	return New(NewConfig(), slog.Default(), repo, p)
+	return New(&Config{}, slog.Default(), repo, p)
 }
 
 // --- ТЕСТЫ ---
