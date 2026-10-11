@@ -59,6 +59,12 @@ func (u *User) hashPassword() error {
 	return nil
 }
 
+// ComparePassword сравнивает открытый пароль с хешем.
+func (u *User) ComparePassword(password string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(u.EncryptedPassword), []byte(password))
+	return err == nil
+}
+
 func encryptString(s string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(s), bcrypt.DefaultCost)
 	if err != nil {

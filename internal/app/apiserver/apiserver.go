@@ -42,6 +42,7 @@ func (s *APIServer) Start() error {
 func (s *APIServer) configureRouter() {
 	s.router.HandleFunc("GET /health", s.handleHealth())
 	s.router.HandleFunc("POST /users", s.handleCreateUser())
+	s.router.HandleFunc("POST /sessions", s.handleCreateSession())
 	s.router.HandleFunc("GET /users/{id}", s.handleGetUser())
 	s.router.HandleFunc("PUT /users/{id}", s.handleUpdateUser())
 	s.router.HandleFunc("DELETE /users/{id}", s.handleDeleteUser())

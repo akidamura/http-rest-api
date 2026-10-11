@@ -19,3 +19,17 @@ func TestUser_BeforeCreate(t *testing.T) {
 		t.Error("expected password to be cleared")
 	}
 }
+
+func TestUser_ComparePassword(t *testing.T) {
+	u := model.NewTestUser(t)
+	if err := u.BeforeCreate(); err != nil {
+		t.Fatal(err)
+	}
+
+	if !u.ComparePassword("secret123") {
+		t.Error("expected password to match")
+	}
+	if u.ComparePassword("wrong") {
+		t.Error("expected password not to match")
+	}
+}
