@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/akidamura/http-rest-api/internal/app/model"
+	"github.com/gorilla/sessions"
 )
 
 // --- фейки ---
@@ -66,7 +67,8 @@ func newFakeUserRepo() *fakeUserRepo {
 }
 
 func newTestAPI(repo UserRepository, p Pinger) *APIServer {
-	return New(&Config{}, slog.Default(), repo, p)
+	sessionStore := sessions.NewCookieStore([]byte("test-secret-key"))
+	return New(&Config{}, slog.Default(), repo, p, sessionStore)
 }
 
 // --- ТЕСТЫ ---
@@ -264,53 +266,56 @@ func TestHandleCreateSession_DBError(t *testing.T) {
 }
 
 // --- GetUser ---
-
-// TestHandleGetUser_OK Найден → 200
-func TestHandleGetUser_OK(t *testing.T) {
-	repo := newFakeUserRepo()
-	repo.findByIDFn = func(ctx context.Context, id int) (*model.User, error) {
-		return &model.User{ID: id, Email: "user@example.org"}, nil
+// TestHandleGetUser тесты found, not found, invalid id
+func TestHandleGetUser(t *testing.T) {
+	tests := []struct {
+		name       string
+		idParam    string
+		findByIDFn func(ctx context.Context, id int) (*model.User, error)
+		wantCode   int
+	}{
+		{
+			name:    "ok - user found",
+			idParam: "42",
+			findByIDFn: func(ctx context.Context, id int) (*model.User, error) {
+				return &model.User{ID: id, Email: "user@example.org"}, nil
+			},
+			wantCode: http.StatusOK, // Найден → 200
+		},
+		{
+			name:    "not found",
+			idParam: "42",
+			findByIDFn: func(_ context.Context, _ int) (*model.User, error) {
+				return nil, nil
+			},
+			wantCode: http.StatusNotFound, // Не найден → 404
+		},
+		{
+			name:       "invalid id",
+			idParam:    "abc",
+			findByIDFn: nil,                   // не вызывается
+			wantCode:   http.StatusBadRequest, // Невалидный ID → 400
+		},
 	}
-	api := newTestAPI(repo, &fakePinger{})
 
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/users/42", nil)
-	req.SetPathValue("id", "42")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := newFakeUserRepo()
+			if tt.findByIDFn != nil {
+				repo.findByIDFn = tt.findByIDFn
+			}
+			api := newTestAPI(repo, &fakePinger{})
 
-	api.handleGetUser().ServeHTTP(rec, req)
+			req := httptest.NewRequest(http.MethodGet, "/users/"+tt.idParam, nil)
+			req.SetPathValue("id", tt.idParam)
+			rec := httptest.NewRecorder()
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("got %d, want %d", rec.Code, http.StatusOK)
-	}
-}
+			api.handleGetUser().ServeHTTP(rec, req)
 
-// TestHandleGetUser_NotFound Не найден → 404
-func TestHandleGetUser_NotFound(t *testing.T) {
-	api := newTestAPI(newFakeUserRepo(), &fakePinger{})
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/user/42", nil)
-	req.SetPathValue("id", "42")
-
-	api.handleGetUser().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("got %d, want %d", rec.Code, http.StatusNotFound)
-	}
-}
-
-// TestHandleGetUser_InvalidID Невалидный ID → 400
-func TestHandleGetUser_InvalidID(t *testing.T) {
-	api := newTestAPI(newFakeUserRepo(), &fakePinger{})
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/users/abc", nil)
-	req.SetPathValue("id", "abc")
-
-	api.handleGetUser().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("got %d, want %d", rec.Code, http.StatusBadRequest)
+			if rec.Code != tt.wantCode {
+				t.Fatalf("got %d, want %d, body=%q", rec.Code, tt.wantCode, rec.Body.String())
+			}
+		})
 	}
 }
 

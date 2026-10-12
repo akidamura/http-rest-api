@@ -10,25 +10,35 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/gorilla/sessions"
 )
 
 // APIServer ...
 type APIServer struct {
-	config   *Config
-	logger   *slog.Logger
-	router   *http.ServeMux
-	userRepo UserRepository
-	pinger   Pinger
+	config       *Config
+	logger       *slog.Logger
+	router       *http.ServeMux
+	userRepo     UserRepository
+	pinger       Pinger
+	sessionStore sessions.Store
 }
 
 // New собирает структуру сервера
-func New(config *Config, logger *slog.Logger, userRepo UserRepository, pinger Pinger) *APIServer {
+func New(
+	config *Config,
+	logger *slog.Logger,
+	userRepo UserRepository,
+	pinger Pinger,
+	sessionStore sessions.Store,
+) *APIServer {
 	s := &APIServer{
-		config:   config,
-		logger:   logger,
-		router:   http.NewServeMux(),
-		userRepo: userRepo,
-		pinger:   pinger,
+		config:       config,
+		logger:       logger,
+		router:       http.NewServeMux(),
+		userRepo:     userRepo,
+		pinger:       pinger,
+		sessionStore: sessionStore,
 	}
 
 	s.configureRouter()
@@ -83,4 +93,6 @@ func (s *APIServer) configureRouter() {
 	s.router.HandleFunc("GET /users/{id}", s.handleGetUser())
 	s.router.HandleFunc("PUT /users/{id}", s.handleUpdateUser())
 	s.router.HandleFunc("DELETE /users/{id}", s.handleDeleteUser())
+	//защищённая ручка
+	s.router.Handle("GET /private/whoami", s.authenticateUser(s.handleWhoami()))
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/akidamura/http-rest-api/internal/app/store"
 	"github.com/akidamura/http-rest-api/internal/app/store/sqlstore"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/gorilla/sessions"
 
 	"github.com/akidamura/http-rest-api/internal/app/apiserver"
 	"github.com/joho/godotenv"
@@ -42,8 +43,11 @@ func main() {
 	// 2. Собираем Store поверх готового *sql.DB
 	st := sqlstore.New(db)
 
-	// 3. Собираем сервер
-	s := apiserver.New(cfg, logger, st.User(), st)
+	// 3. SessionStore
+	sessionStore := sessions.NewCookieStore([]byte(cfg.SessionKey))
+
+	// 4. Собираем сервер
+	s := apiserver.New(cfg, logger, st.User(), st, sessionStore)
 	if err := s.Start(); err != nil {
 		logger.Error("server stopped", "err", err)
 		os.Exit(1)
@@ -69,7 +73,7 @@ func newLogger(level string, format string) *slog.Logger {
 		Level: parseLogLevel(level),
 	}
 
-	// Для text — сокращаем время
+	// Для text - сокращенный формат времени
 	if format != "json" {
 		opts.ReplaceAttr = func(groups []string, a slog.Attr) slog.Attr {
 			if a.Key == slog.TimeKey {
