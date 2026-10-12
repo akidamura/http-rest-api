@@ -21,3 +21,10 @@ vendor/
 # Cookies
 cookies.txt
 *.cookies.txt
+.cookies
+
+# Binaries
+apiserver
+
+# Coverage
+coverage.out
