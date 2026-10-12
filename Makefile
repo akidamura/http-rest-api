@@ -29,6 +29,10 @@ test-cover:
 	go test ./... -coverprofile=coverage.out
 	go tool cover -html=coverage.out
 
+.PHONY: smoke
+smoke:
+	./scripts/smoke.sh
+
 .PHONY: test-auth
 test-auth:
 	go test ./internal/app/apiserver/... -v -run "TestAuthenticateUser|TestHandleWhoami"
