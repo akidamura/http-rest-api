@@ -6,14 +6,16 @@ import (
 
 // Config apiserver
 type Config struct {
-	BindAddr string
-	LogLevel string
+	BindAddr  string
+	LogLevel  string
+	LogFormat string
 }
 
 // NewConfig собирает конфиг apiserver из ENV
 func NewConfig() *Config {
 	return &Config{
-		BindAddr: config.GetEnv("BIND_ADDR", ":8080"),
-		LogLevel: config.GetEnv("LOG_LEVEL", "info"),
+		BindAddr:  config.GetEnv("BIND_ADDR", ":8080"),
+		LogLevel:  config.GetEnv("LOG_LEVEL", "info"),
+		LogFormat: config.GetEnv("LOG_FORMAT", "text"),
 	}
 }
