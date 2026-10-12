@@ -32,10 +32,14 @@ func New(config *Config, logger *slog.Logger, userRepo UserRepository, pinger Pi
 func (s *APIServer) Start() error {
 	s.logger.Info("Starting API Server", "addr", s.config.BindAddr)
 
-	//	ListenAndServe запускает TCP-сервер. При каждом входящем запросе вызывает s.router.ServeHTTP(w, r)
-	//	передаёт роутер в http.Server. http.Server сам вызывает router.ServeHTTP для каждого запроса
-	//	s.router - ServeMux с зарегистрированными маршрутами
-	return http.ListenAndServe(s.config.BindAddr, s.router)
+	// Оборачиваем роутер middleware'ами.
+	// Порядок: снаружи внутрь — setRequestID → logRequest → router.
+	handler := s.setRequestID(s.logRequest(s.router))
+
+	// ListenAndServe запускает TCP-сервер.
+	// При каждом запросе вызывает handler.ServeHTTP(w, r),
+	// где handler — цепочка middleware + router.
+	return http.ListenAndServe(s.config.BindAddr, handler)
 }
 
 // configureRouter регистрирует ручки
