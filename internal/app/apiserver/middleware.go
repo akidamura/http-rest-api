@@ -11,7 +11,44 @@ import (
 
 type ctxKey int
 
-const ctxKeyRequestID ctxKey = iota
+const (
+	ctxKeyRequestID ctxKey = iota
+	ctxKeyUser
+)
+
+// authenticateUser проверяет куку с session и кладёт пользователя в контекст.
+func (s *APIServer) authenticateUser(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		session, err := s.sessionStore.Get(r, sessionName)
+		if err != nil {
+			http.Error(w, "invalid session", http.StatusUnauthorized)
+			return
+		}
+
+		userID, ok := session.Values["user_id"].(int)
+		if !ok {
+			http.Error(w, "not authenticated", http.StatusUnauthorized)
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), time.Second*5)
+		defer cancel()
+
+		user, err := s.userRepo.FindByID(ctx, userID)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		if user == nil {
+			http.Error(w, "user not found", http.StatusUnauthorized)
+			return
+		}
+
+		// кладём user в контекст
+		ctxWithUser := context.WithValue(r.Context(), ctxKeyUser, user)
+		next.ServeHTTP(w, r.WithContext(ctxWithUser))
+	})
+}
 
 // setRequestID добавляет X-Request-ID в заголовок ответа и в контекст запроса.
 func (s *APIServer) setRequestID(next http.Handler) http.Handler {

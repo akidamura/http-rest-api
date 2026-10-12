@@ -8,9 +8,30 @@ DB_DSN_TEST = "mysql://$(DB_USER):$(DB_PASSWORD)@tcp($(DB_HOST):$(DB_PORT))/rest
 build:
 	go build -v ./cmd/apiserver
 
+.PHONY: start
+start:
+	./apiserver
+
+.PHONY: run
+run: migrate-up build
+	./apiserver
+
+.PHONY: clean
+clean:
+	rm -f apiserver coverage.out cookies.txt .cookies
+
 .PHONY: test
 test:
 	go test ./... -v -race
+
+.PHONY: test-cover
+test-cover:
+	go test ./... -coverprofile=coverage.out
+	go tool cover -html=coverage.out
+
+.PHONY: test-auth
+test-auth:
+	go test ./internal/app/apiserver/... -v -run "TestAuthenticateUser|TestHandleWhoami"
 
 .PHONY: test-integrations
 test-integrations:

@@ -11,6 +11,8 @@ import (
 	"github.com/akidamura/http-rest-api/internal/app/model"
 )
 
+const sessionName = "http-rest-api"
+
 // handleHealth health check
 func (s *APIServer) handleHealth() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -113,6 +115,31 @@ func (s *APIServer) handleCreateSession() http.HandlerFunc {
 			return
 		}
 
+		// Сохраняем сессию
+		session, err := s.sessionStore.Get(r, sessionName)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		session.Values["user_id"] = user.ID
+		if err := s.sessionStore.Save(r, w, session); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(user)
+	}
+}
+
+// handleWhoami возвращает текущего пользователя.
+func (s *APIServer) handleWhoami() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := r.Context().Value(ctxKeyUser).(*model.User)
+		if !ok {
+			http.Error(w, "not authenticated", http.StatusUnauthorized)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(user)
 	}
