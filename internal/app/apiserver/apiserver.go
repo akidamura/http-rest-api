@@ -1,8 +1,15 @@
 package apiserver
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 )
 
 // APIServer ...
@@ -36,10 +43,36 @@ func (s *APIServer) Start() error {
 	// Порядок: снаружи внутрь — setRequestID → logRequest → router.
 	handler := s.setRequestID(s.logRequest(s.router))
 
-	// ListenAndServe запускает TCP-сервер.
-	// При каждом запросе вызывает handler.ServeHTTP(w, r),
-	// где handler — цепочка middleware + router.
-	return http.ListenAndServe(s.config.BindAddr, handler)
+	srv := &http.Server{
+		Addr:              s.config.BindAddr,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	// Запускаем сервер в горутине
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			s.logger.Error("server error", "err", err)
+		}
+	}()
+
+	// Ждём SIGINT / SIGTERM
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	s.logger.Info("shutting down server")
+
+	// Останавливаем с таймаутом
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		return fmt.Errorf("server shutdown: %w", err)
+	}
+
+	s.logger.Info("server stopped")
+	return nil
 }
 
 // configureRouter регистрирует ручки
