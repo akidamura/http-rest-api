@@ -9,5 +9,4 @@ REST API на Go.
 ## Запуск
 \`\`\`bash
 make
-./apiserver
 \`\`\`
