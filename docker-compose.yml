@@ -1,0 +1,83 @@
+services:
+  # ─────────────────────────────────
+  # MySQL
+  # ─────────────────────────────────
+  db:
+    image: mysql:8
+    container_name: http-rest-api-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+    ports:
+      - "3306:3306"        # проброс наружу (для Sequel Ace)
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - http-rest-api-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_PASSWORD}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
+  # ─────────────────────────────────
+  # Миграции (одноразовый сервис)
+  # ─────────────────────────────────
+  migrate:
+    image: migrate/migrate:v4.17.0
+    container_name: http-rest-api-migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./migrations:/migrations
+    networks:
+      - http-rest-api-net
+    command: [
+      "-path", "/migrations",
+      "-database", "mysql://${DB_USER}:${DB_PASSWORD}@tcp(db:3306)/${DB_NAME}?parseTime=true",
+      "up"
+    ]
+
+  # ─────────────────────────────────
+  # Приложение
+  # ─────────────────────────────────
+  app:
+    build: .
+    image: akidamura/http-rest-api:v1.0
+    container_name: http-rest-api-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      BIND_ADDR: ":8080"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+      LOG_FORMAT: "${LOG_FORMAT:-text}"
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      SESSION_KEY: ${SESSION_KEY}
+    ports:
+      - "8080:8080"
+    networks:
+      - http-rest-api-net
+
+# ─────────────────────────────────
+# Volumes
+# ─────────────────────────────────
+volumes:
+  mysql_data:
+
+# ─────────────────────────────────
+# Networks
+# ─────────────────────────────────
+networks:
+  http-rest-api-net:
+    driver: bridge
