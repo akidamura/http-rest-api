@@ -1,0 +1,42 @@
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Binaries
+apiserver
+*.exe
+*.test
+*.out
+bin/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Cookies
+.cookies
+cookies.txt
+*.cookies.txt
+
+# Coverage
+coverage.out
+
+# Docs
+README.md
+*.md
+
+# Scripts и Makefile — только для разработки
+scripts/
+Makefile
+
+# Migrations — применяются отдельно
+migrations/
+
+# Vendor — если есть
+vendor/
