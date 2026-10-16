@@ -1,0 +1,31 @@
+# HTTP-запросы для REST API
+# Требуется запущенный сервер: docker compose up
+#
+# Использование: открыть в GoLand, нажать ▶️ рядом с запросом
+
+### Health (direct, no TLS)
+GET http://localhost:8080/health
+
+### Create user
+POST http://localhost:8080/users
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "secret123"
+}
+
+### Get user
+GET http://localhost:8080/users/1
+
+### Login
+POST http://localhost:8080/sessions
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "secret123"
+}
+
+### Whoami (with cookie)
+GET http://localhost:8080/private/whoami

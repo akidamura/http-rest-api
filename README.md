@@ -6,6 +6,7 @@
 
 - **Go** 1.27 — `net/http`, `log/slog`, `database/sql`
 - **MySQL** 8 — основная БД
+- **Nginx** — TLS-терминация, reverse proxy
 - **Docker** + **docker-compose** — контейнеризация
 - **golang-migrate** — миграции БД
 - **bcrypt** — хеширование паролей
@@ -16,6 +17,7 @@
 - CRUD пользователей
 - Аутентификация по email/паролю с выдачей сессионной куки
 - Защищённые эндпоинты через middleware
+- HTTPS через Nginx (TLS-терминация)
 - Health-check с проверкой БД
 - Логирование запросов с `X-Request-Id`
 - Graceful shutdown
@@ -35,19 +37,29 @@ cd http-rest-api
 cp .env.example .env
 # Отредактировать .env — задать DB_PASSWORD и SESSION_KEY
 
-# 3. Запустить всё
+# 3. Сгенерировать самоподписанный сертификат для HTTPS
+mkdir -p nginx/certs
+openssl req -x509 -newkey rsa:2048 \
+  -keyout nginx/certs/key.pem \
+  -out nginx/certs/cert.pem \
+  -days 365 -nodes \
+  -subj "/CN=localhost"
+
+# 4. Запустить всё
 docker compose up
 ```
 
 Сервисы поднимутся автоматически:
+
 - **MySQL** на порту `3306`
 - **Приложение** на порту `8080`
+- **Nginx** на портах `80` и `443`
 - **Миграции** применятся при старте
 
 **Проверка:**
 
 ```bash
-curl http://localhost:8080/health
+curl -k https://localhost/health
 # {"status":"ok"}
 ```
 
@@ -73,25 +85,19 @@ make run
 
 ### Health
 
-| Метод | Endpoint | Описание |
-|-------|----------|----------|
-| `GET` | `/health` | Проверка живости сервиса и БД |
+- **`GET /health`** — проверка живости сервиса и БД
 
 ### Пользователи
 
-| Метод | Endpoint | Описание |
-|-------|----------|----------|
-| `POST` | `/users` | Регистрация |
-| `GET` | `/users/{id}` | Получить пользователя |
-| `PUT` | `/users/{id}` | Обновить |
-| `DELETE` | `/users/{id}` | Удалить |
+- **`POST /users`** — регистрация
+- **`GET /users/{id}`** — получить пользователя
+- **`PUT /users/{id}`** — обновить
+- **`DELETE /users/{id}`** — удалить
 
 ### Сессии
 
-| Метод | Endpoint | Описание |
-|-------|----------|----------|
-| `POST` | `/sessions` | Логин, устанавливает куку |
-| `GET` | `/private/whoami` | Текущий пользователь (нужна кука) |
+- **`POST /sessions`** — логин, устанавливает куку
+- **`GET /private/whoami`** — текущий пользователь (нужна кука)
 
 ### Примеры
 
@@ -116,6 +122,35 @@ curl -c .cookies -X POST http://localhost:8080/sessions \
 ```bash
 curl -b .cookies http://localhost:8080/private/whoami
 ```
+
+## HTTPS через Nginx
+
+Nginx принимает HTTPS на порту `443`, расшифровывает и проксирует запросы в Go-сервис по HTTP внутри Docker-сети.
+
+```
+Клиент → HTTPS (443) → Nginx → HTTP (8080) → Go
+```
+
+### Самоподписанный сертификат
+
+Используется для локальной разработки. Сертификаты не коммитятся — каждый генерирует свои (см. «Быстрый старт»).
+
+### Проверка HTTPS
+
+```bash
+# HTTP редиректит на HTTPS
+curl -i http://localhost/health
+# HTTP/1.1 301 Moved Permanently
+# Location: https://localhost/health
+
+# HTTPS с игнорированием самоподписанного сертификата
+curl -k https://localhost/health
+# {"status":"ok"}
+```
+
+### В продакшене
+
+Вместо самоподписанного сертификата используется Let's Encrypt или корпоративный CA. Конфигурация Nginx и схема проксирования остаются те же.
 
 ## Тесты
 
@@ -142,6 +177,10 @@ make smoke             # smoke-тесты API
 │   └── config/             # общие утилиты
 ├── migrations/             # SQL-миграции
 ├── scripts/                # smoke-тесты
+├── nginx/                  # конфиг Nginx + сертификаты
+│   ├── nginx.conf
+│   └── certs/              # сертификаты (не в Git)
+├── requests.http           # примеры запросов для GoLand
 ├── Dockerfile
 ├── docker-compose.yml
 └── Makefile
@@ -149,17 +188,23 @@ make smoke             # smoke-тесты API
 
 ## Переменные окружения
 
-| Переменная | По умолчанию | Описание |
-|------------|--------------|----------|
-| `BIND_ADDR` | `:8080` | Адрес сервера |
-| `LOG_LEVEL` | `info` | Уровень логов |
-| `LOG_FORMAT` | `text` | Формат логов (`text` / `json`) |
-| `DB_HOST` | `localhost` | Хост MySQL |
-| `DB_PORT` | `3306` | Порт MySQL |
-| `DB_USER` | `root` | Пользователь |
-| `DB_PASSWORD` | — | Пароль |
-| `DB_NAME` | `restapi_dev` | Имя базы |
-| `SESSION_KEY` | — | Ключ шифрования сессий |
+**Сервер:**
+
+- `BIND_ADDR` — адрес сервера (по умолчанию `:8080`)
+- `LOG_LEVEL` — уровень логов (`debug`, `info`, `warn`, `error`)
+- `LOG_FORMAT` — формат логов (`text` или `json`)
+
+**MySQL:**
+
+- `DB_HOST` — хост (по умолчанию `localhost`)
+- `DB_PORT` — порт (по умолчанию `3306`)
+- `DB_USER` — пользователь
+- `DB_PASSWORD` — пароль
+- `DB_NAME` — имя базы (по умолчанию `restapi_dev`)
+
+**Сессии:**
+
+- `SESSION_KEY` — ключ шифрования сессий (64 hex-символа)
 
 ## Миграции
 

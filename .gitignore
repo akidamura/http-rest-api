@@ -18,6 +18,9 @@ vendor/
 .env.local
 .env.*.local
 
+# certs
+nginx/certs/*.pem
+
 # Cookies
 cookies.txt
 *.cookies.txt
