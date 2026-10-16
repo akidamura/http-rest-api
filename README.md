@@ -123,6 +123,41 @@ curl -c .cookies -X POST http://localhost:8080/sessions \
 curl -b .cookies http://localhost:8080/private/whoami
 ```
 
+## Usage
+
+Типичный сценарий: регистрация → логин → работа с защищёнными эндпоинтами.
+
+```bash
+# 1. Регистрация нового пользователя
+curl -X POST http://localhost:8080/users \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.org","password":"secret123"}'
+
+# 2. Логин — получить сессионную куку (сохраняется в .cookies)
+curl -c .cookies -X POST http://localhost:8080/sessions \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.org","password":"secret123"}'
+
+# 3. Защищённый запрос с кукой
+curl -b .cookies http://localhost:8080/private/whoami
+
+# 4. Обновить пользователя
+curl -X PUT http://localhost:8080/users/1 \
+  -H "Content-Type: application/json" \
+  -d '{"email":"new@example.org","password":"newsecret123"}'
+
+# 5. Удалить пользователя
+curl -X DELETE http://localhost:8080/users/1
+```
+
+**Проверка всех сценариев сразу:**
+
+```bash
+make smoke
+```
+
+Полный список эндпоинтов — в разделе [API](#api).
+
 ## HTTPS через Nginx
 
 Nginx принимает HTTPS на порту `443`, расшифровывает и проксирует запросы в Go-сервис по HTTP внутри Docker-сети.
