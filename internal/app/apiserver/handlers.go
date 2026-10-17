@@ -23,7 +23,7 @@ func (s *APIServer) handleHealth() http.HandlerFunc {
 		if err := s.pinger.Ping(ctx); err != nil {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]string{
+			_ = json.NewEncoder(w).Encode(map[string]string{
 				"status": "unhealthy",
 				"error":  err.Error(),
 			})
@@ -32,7 +32,7 @@ func (s *APIServer) handleHealth() http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	}
 }
 
@@ -77,7 +77,7 @@ func (s *APIServer) handleCreateUser() http.HandlerFunc {
 		// 4. Ответ
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(user)
+		_ = json.NewEncoder(w).Encode(user)
 	}
 }
 
@@ -128,7 +128,7 @@ func (s *APIServer) handleCreateSession() http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(user)
+		_ = json.NewEncoder(w).Encode(user)
 	}
 }
 
@@ -141,7 +141,7 @@ func (s *APIServer) handleWhoami() http.HandlerFunc {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(user)
+		_ = json.NewEncoder(w).Encode(user)
 	}
 }
 
@@ -173,7 +173,7 @@ func (s *APIServer) handleGetUser() http.HandlerFunc {
 
 		// 3. Собираем json для ответа
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(user)
+		_ = json.NewEncoder(w).Encode(user)
 	}
 }
 
@@ -212,16 +212,21 @@ func (s *APIServer) handleUpdateUser() http.HandlerFunc {
 		defer cancel()
 
 		user, err = s.userRepo.Update(ctx, user)
-		if err != nil {
+		switch {
+		case err != nil:
 			if errors.Is(err, model.ErrEmailRequired) || errors.Is(err, model.ErrPasswordRequired) {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
+		case user == nil:
+			http.Error(w, "user not found", http.StatusNotFound)
+			return
 		}
+
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(user)
+		_ = json.NewEncoder(w).Encode(user)
 	}
 }
 
