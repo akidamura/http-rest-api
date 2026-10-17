@@ -218,6 +218,24 @@ RESP=$(request DELETE /users/999999)
 check_status "DELETE /users/{id} (unknown)" "204" "$(get_code "$RESP")"
 
 # ─────────────────────────────────────
+# 9. gRPC (опционально)
+# ─────────────────────────────────────
+echo ""
+echo "── gRPC ──"
+if command -v grpcurl &> /dev/null; then
+    GRPC_RESP=$(grpcurl -plaintext localhost:50051 list 2>/dev/null)
+    if [[ "$GRPC_RESP" == *"user.v1.UserService"* ]]; then
+        echo -e "${GREEN}✓${NC} gRPC reflection is working"
+        PASS=$((PASS + 1))
+    else
+        echo -e "${RED}✗${NC} gRPC reflection failed"
+        FAIL=$((FAIL + 1))
+    fi
+else
+    echo -e "${YELLOW}⚠${NC} grpcurl not found, skipping gRPC tests"
+fi
+
+# ─────────────────────────────────────
 # Итог
 # ─────────────────────────────────────
 

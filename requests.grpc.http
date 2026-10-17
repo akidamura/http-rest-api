@@ -1,0 +1,14 @@
+### gRPC: Health check (список сервисов)
+GRPC localhost:50051/user.v1.UserService/CreateUser
+
+{
+  "email": "grpc-test@example.org",
+  "password": "secret123"
+}
+
+### gRPC: GetUser
+GRPC localhost:50051/user.v1.UserService/GetUser
+
+{
+  "id": 1
+}
