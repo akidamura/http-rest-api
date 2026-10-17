@@ -17,8 +17,8 @@ var (
 type User struct {
 	ID                int        `json:"id"`
 	Email             string     `json:"email"`
-	Password          string     `json:"-"`
-	EncryptedPassword string     `json:"-"`
+	Password          string     `json:"-"`                    // ← скрыто в JSON
+	EncryptedPassword string     `json:"-"`                    // ← скрыто в JSON
 	CreatedAt         *time.Time `json:"created_at,omitempty"` // '*' потому что omitempty не работает с time.Time, структура, а не примитив
 }
 

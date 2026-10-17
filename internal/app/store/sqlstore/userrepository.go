@@ -84,10 +84,23 @@ func (r *UserRepository) Update(ctx context.Context, u *model.User) (*model.User
 	}
 
 	query := `UPDATE users SET email = ?, encrypted_password = ? WHERE id = ?`
-	_, err := r.store.db.ExecContext(ctx, query, u.Email, u.EncryptedPassword, u.ID)
+
+	res, err := r.store.db.ExecContext(ctx, query, u.Email, u.EncryptedPassword, u.ID)
 	if err != nil {
 		return nil, err
 	}
+
+	// Спрашиваем у базы: сколько строк реально изменилось?
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+
+	// Если 0 — значит такого ID в базе нет. Возвращаем nil, nil
+	if rows == 0 {
+		return nil, nil
+	}
+
 	return u, nil
 }
 
