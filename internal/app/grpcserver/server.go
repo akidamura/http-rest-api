@@ -7,6 +7,7 @@ import (
 
 	userv1 "github.com/akidamura/http-rest-api/internal/pb/user/v1"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 // Server реализует gRPC-сервис UserService
@@ -32,6 +33,7 @@ func (s *Server) Start(addr string, logger *slog.Logger) error {
 
 	grpcServer := grpc.NewServer()
 	userv1.RegisterUserServiceServer(grpcServer, s)
+	reflection.Register(grpcServer)
 
 	go func() {
 		logger.Info("Starting gRPC server", "addr", addr)
