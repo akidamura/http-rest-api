@@ -1,12 +1,13 @@
-# REST API на Go
+# REST API и gRPC сервис на Go
 
-Учебный REST API для управления пользователями: CRUD, аутентификация через сессии, health-check. Построен на стандартной библиотеке Go без внешних фреймворков.
+Учебный бэкенд-сервис для управления пользователями. Поддерживает два транспорта: классический REST (JSON/HTTP) и высокопроизводительный gRPC (Protobuf/HTTP2). Построен на стандартной библиотеке Go без использования тяжелых веб-фреймворков.
 
 ## Стек
 
 - **Go** 1.27 — `net/http`, `log/slog`, `database/sql`
+- **gRPC** + **Protobuf** — бинарный RPC-транспорт, строгий контракт
 - **MySQL** 8 — основная БД
-- **Nginx** — TLS-терминация, reverse proxy
+- **Nginx** — TLS-терминация для HTTP, reverse proxy
 - **Docker** + **docker-compose** — контейнеризация
 - **golang-migrate** — миграции БД
 - **bcrypt** — хеширование паролей
@@ -14,15 +15,16 @@
 
 ## Возможности
 
-- CRUD пользователей
-- Аутентификация по email/паролю с выдачей сессионной куки
-- Защищённые эндпоинты через middleware
+- CRUD пользователей через HTTP (REST) и gRPC (Protobuf)
+- Аутентификация по email/паролю с выдачей сессионной куки (HTTP)
+- Защищённые эндпоинты через middleware (HTTP)
+- gRPC Server Reflection (для удобного тестирования через `grpcurl` и GoLand)
 - HTTPS через Nginx (TLS-терминация)
 - Health-check с проверкой БД
 - Логирование запросов с `X-Request-Id`
-- Graceful shutdown
+- Graceful shutdown (HTTP и gRPC)
 - Пул соединений MySQL
-- Unit + интеграционные тесты
+- Unit-тесты (HTTP + gRPC) и интеграционные тесты (БД)
 
 ## Быстрый старт
 
@@ -46,17 +48,18 @@ openssl req -x509 -newkey rsa:2048 \
   -subj "/CN=localhost"
 
 # 4. Запустить всё
-docker compose up
+docker compose up --build
 ```
 
 Сервисы поднимутся автоматически:
 
 - **MySQL** на порту `3306`
-- **Приложение** на порту `8080`
+- **Приложение (HTTP)** на порту `8080`
+- **Приложение (gRPC)** на порту `50051`
 - **Nginx** на портах `80` и `443`
 - **Миграции** применятся при старте
 
-**Проверка:**
+**Проверка HTTP:**
 
 ```bash
 curl -k https://localhost/health
@@ -77,51 +80,63 @@ mysql -u root -p -e "CREATE DATABASE restapi_dev;"
 # 3. Применить миграции
 make migrate-up
 
-# 4. Запустить
+# 4. Запустить сервер (HTTP + gRPC)
 make run
 ```
 
 ## API
 
-### Health
+### HTTP REST API (порт 8080)
 
+**Health**
 - **`GET /health`** — проверка живости сервиса и БД
 
-### Пользователи
-
+**Пользователи**
 - **`POST /users`** — регистрация
 - **`GET /users/{id}`** — получить пользователя
 - **`PUT /users/{id}`** — обновить
 - **`DELETE /users/{id}`** — удалить
 
-### Сессии
-
+**Сессии**
 - **`POST /sessions`** — логин, устанавливает куку
 - **`GET /private/whoami`** — текущий пользователь (нужна кука)
 
-### Примеры
+**Примеры:**
 
-**Регистрация:**
-
+*Регистрация:*
 ```bash
 curl -X POST http://localhost:8080/users \
   -H "Content-Type: application/json" \
   -d '{"email":"user@example.org","password":"secret123"}'
 ```
 
-**Логин:**
-
+*Логин:*
 ```bash
 curl -c .cookies -X POST http://localhost:8080/sessions \
   -H "Content-Type: application/json" \
   -d '{"email":"user@example.org","password":"secret123"}'
 ```
 
-**Получить текущего пользователя:**
-
+*Получить текущего пользователя:*
 ```bash
 curl -b .cookies http://localhost:8080/private/whoami
 ```
+
+### gRPC API (порт 50051)
+
+**Сервис:** `user.v1.UserService`
+- `CreateUser` — регистрация
+- `GetUser` — получение по ID
+- `UpdateUser` — обновление
+- `DeleteUser` — удаление
+
+Для тестирования можно использовать `grpcurl`:
+```bash
+grpcurl -plaintext -d '{"email":"test@example.org", "password":"secret123"}' \
+  localhost:50051 user.v1.UserService/CreateUser
+```
+
+Или встроенный HTTP Client в GoLand (файл `requests.grpc.http`).
 
 ## Usage
 
@@ -156,14 +171,15 @@ curl -X DELETE http://localhost:8080/users/1
 make smoke
 ```
 
-Полный список эндпоинтов — в разделе [API](#api).
+Полный список HTTP-эндпоинтов — в разделе [API](#api). Примеры всех сценариев — в файлах `requests.http` и `requests.grpc.http`.
 
 ## HTTPS через Nginx
 
-Nginx принимает HTTPS на порту `443`, расшифровывает и проксирует запросы в Go-сервис по HTTP внутри Docker-сети.
+Nginx принимает HTTPS на порту `443`, расшифровывает и проксирует запросы в Go-сервис по HTTP внутри Docker-сети. gRPC-трафик (порт `50051`) проксируется напрямую, минуя Nginx (в учебных целях).
 
 ```
-Клиент → HTTPS (443) → Nginx → HTTP (8080) → Go
+Клиент (HTTP) → HTTPS (443) → Nginx → HTTP (8080) → Go
+Клиент (gRPC) → TCP (50051) ────────────────────────→ Go
 ```
 
 ### Самоподписанный сертификат
@@ -190,32 +206,39 @@ curl -k https://localhost/health
 ## Тесты
 
 ```bash
-make test              # все тесты
-make test-units        # только model
-make test-integrations # только store (с MySQL)
+make test              # все тесты (Unit + Интеграционные)
+make test-units        # быстрые Unit-тесты (Model + HTTP + gRPC)
+make test-grpc         # только тесты gRPC
+make test-http         # только тесты HTTP
+make test-integrations # интеграционные тесты с реальной MySQL
 make test-cover        # отчёт о покрытии
-make smoke             # smoke-тесты API
+make smoke             # smoke-тесты HTTP API
 ```
 
 ## Структура проекта
 
 ```
 .
-├── cmd/apiserver/          # точка входа
+├── api/
+│   └── proto/user/v1/      # Protobuf-контракты (user.proto)
+├── cmd/apiserver/          # точка входа (запуск HTTP и gRPC)
 ├── internal/
 │   ├── app/
 │   │   ├── apiserver/      # HTTP-сервер, хендлеры, middleware
+│   │   ├── grpcserver/     # gRPC-сервер, хендлеры, конвертеры
 │   │   ├── model/          # модели данных
 │   │   └── store/          # работа с БД
 │   │       ├── sqlstore/   # MySQL-реализация
 │   │       └── teststore/  # in-memory для тестов
+│   ├── pb/                 # Сгенерированный Go-код из protobuf
 │   └── config/             # общие утилиты
 ├── migrations/             # SQL-миграции
 ├── scripts/                # smoke-тесты
 ├── nginx/                  # конфиг Nginx + сертификаты
 │   ├── nginx.conf
 │   └── certs/              # сертификаты (не в Git)
-├── requests.http           # примеры запросов для GoLand
+├── requests.http           # примеры HTTP-запросов
+├── requests.grpc.http      # примеры gRPC-запросов
 ├── Dockerfile
 ├── docker-compose.yml
 └── Makefile
@@ -225,7 +248,7 @@ make smoke             # smoke-тесты API
 
 **Сервер:**
 
-- `BIND_ADDR` — адрес сервера (по умолчанию `:8080`)
+- `BIND_ADDR` — адрес HTTP-сервера (по умолчанию `:8080`)
 - `LOG_LEVEL` — уровень логов (`debug`, `info`, `warn`, `error`)
 - `LOG_FORMAT` — формат логов (`text` или `json`)
 
