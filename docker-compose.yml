@@ -16,7 +16,7 @@ services:
     networks:
       - http-rest-api-net
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_PASSWORD}"]
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_PASSWORD}" ]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -65,12 +65,13 @@ services:
       DB_NAME: ${DB_NAME}
       SESSION_KEY: ${SESSION_KEY}
     ports:
-      - "8080:8080"
+      - "8080:8080"      # HTTP
+      - "50051:50051"    # gRPC
     networks:
       - http-rest-api-net
 
   # ─────────────────────────────────
-  # Nginx (TLS termination)
+  # Nginx (TLS termination для HTTP)
   # ─────────────────────────────────
   nginx:
     image: nginx:alpine

@@ -36,6 +36,6 @@ WORKDIR /app
 # Копируем только бинарник из builder
 COPY --from=builder --chown=appuser:appuser /build/app /app/app
 
-EXPOSE 8080
+EXPOSE 8080 50051
 
 CMD ["/app/app"]
