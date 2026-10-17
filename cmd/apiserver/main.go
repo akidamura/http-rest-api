@@ -6,12 +6,12 @@ import (
 	"os"
 	"time"
 
+	"github.com/akidamura/http-rest-api/internal/app/apiserver"
+	"github.com/akidamura/http-rest-api/internal/app/grpcserver"
 	"github.com/akidamura/http-rest-api/internal/app/store"
 	"github.com/akidamura/http-rest-api/internal/app/store/sqlstore"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
-
-	"github.com/akidamura/http-rest-api/internal/app/apiserver"
 	"github.com/joho/godotenv"
 )
 
@@ -46,8 +46,19 @@ func main() {
 	// 3. SessionStore
 	sessionStore := sessions.NewCookieStore([]byte(cfg.SessionKey))
 
-	// 4. Собираем сервер
+	// 4. Собираем HTTP сервер
 	s := apiserver.New(cfg, logger, st.User(), st, sessionStore)
+
+	// 5. Собираем gRPC сервер
+	grpcSrv := grpcserver.New(st.User())
+
+	// 6. Запускаем gRPC (он запустится в фоне и не заблокирует код)
+	if err := grpcSrv.Start(":50051", logger); err != nil {
+		logger.Error("failed to start gRPC server", "err", err)
+		os.Exit(1)
+	}
+
+	// 7. Запускаем HTTP (эта функция заблокирует main и будет ждать Ctrl+C)
 	if err := s.Start(); err != nil {
 		logger.Error("server stopped", "err", err)
 		os.Exit(1)

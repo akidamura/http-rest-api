@@ -376,6 +376,27 @@ func TestHandleUpdateUser_ValidationError(t *testing.T) {
 	}
 }
 
+// TestHandleUpdateUser_NotFound Пользователь не найден → 404
+func TestHandleUpdateUser_NotFound(t *testing.T) {
+	repo := newFakeUserRepo()
+	// Настраиваем фейк так, чтобы он возвращал nil, nil
+	repo.updateFn = func(_ context.Context, _ *model.User) (*model.User, error) {
+		return nil, nil
+	}
+	api := newTestAPI(repo, &fakePinger{})
+
+	body := `{"email":"user@example.org","password":"secret123"}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/users/999", strings.NewReader(body))
+	req.SetPathValue("id", "999")
+
+	api.handleUpdateUser().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("got %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
 // --- DeleteUser ---
 
 // TestHandleDeleteUser_OK Успех → 204
